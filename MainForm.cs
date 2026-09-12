@@ -55,6 +55,7 @@ namespace VSOfflineTool
         private ListView _oldModulesList;
         private Button _deleteOldButton;
         private Button _officialCleanButton;
+        private TextBox _cleanupOutput;
 
         private List<VsModule> _oldModules = new List<VsModule>();
         private bool _cleanupTabActivated;
@@ -1444,11 +1445,11 @@ namespace VSOfflineTool
                 Padding = new Padding(8)
             };
 
-            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-
+            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));    // folder
+            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));    // note
+            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 60)); // old modules
+            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));    // buttons
+            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 40)); // output
 
             // =========================
             // FOLDER
@@ -1487,10 +1488,7 @@ namespace VSOfflineTool
             folderButton.Click += (s, e) =>
                 PickCleanupFolder();
 
-            topRow.Controls.Add(
-                folderButton,
-                0,
-                0);
+            topRow.Controls.Add(folderButton,0,0);
 
 
             _cleanupFolderBox = new TextBox
@@ -1508,10 +1506,7 @@ namespace VSOfflineTool
 
             folderGroup.Controls.Add(topRow);
 
-            layout.Controls.Add(
-                folderGroup,
-                0,
-                0);
+            layout.Controls.Add(folderGroup,0,0);
 
 
             // =========================
@@ -1534,10 +1529,7 @@ namespace VSOfflineTool
                     "(same as the original tool, which has no per-item selection at all)."
             };
 
-            layout.Controls.Add(
-                noteLabel,
-                0,
-                1);
+            layout.Controls.Add(noteLabel,0,1);
 
 
             // =========================
@@ -1572,10 +1564,7 @@ namespace VSOfflineTool
             modulesGroup.Controls.Add(
                 _oldModulesList);
 
-            layout.Controls.Add(
-                modulesGroup,
-                0,
-                2);
+            layout.Controls.Add(modulesGroup,0,2);
 
 
             // =========================
@@ -1629,15 +1618,62 @@ namespace VSOfflineTool
 
             buttonsGroup.Controls.Add(buttons);
 
-            layout.Controls.Add(
-                buttonsGroup,
-                0,
-                3);
+            layout.Controls.Add(buttonsGroup,0,3);
+
+            // =========================
+            // CLEANUP OUTPUT
+            // =========================
+
+            var outputGroup = new GroupBox
+            {
+                Text = "Cleanup output",
+                Dock = DockStyle.Fill,
+                Padding = new Padding(8, 10, 8, 8),
+                Margin = new Padding(0, 6, 0, 0)
+            };
+
+            _cleanupOutput = new TextBox
+            {
+                Dock = DockStyle.Fill,
+                Multiline = true,
+                ReadOnly = true,
+                ScrollBars = ScrollBars.Vertical,
+                Font = new Font("Consolas", 9),
+                Margin = new Padding(3)
+            };
+
+            outputGroup.Controls.Add(_cleanupOutput);
+
+            layout.Controls.Add(outputGroup,0,4);
 
 
             page.Controls.Add(layout);
 
             return page;
+        }
+
+        private void AppendCleanupLog(string message)
+        {
+            if (_cleanupOutput == null)
+                return;
+
+            if (_cleanupOutput.InvokeRequired)
+            {
+                _cleanupOutput.BeginInvoke(
+                    new Action(() => AppendCleanupLog(message)));
+                return;
+            }
+
+            _cleanupOutput.AppendText(
+                $"[{DateTime.Now:HH:mm:ss}] {message}\r\n");
+
+            _cleanupOutput.SelectionStart = _cleanupOutput.TextLength;
+            _cleanupOutput.ScrollToCaret();
+        }
+
+        private void ClearCleanupLog()
+        {
+            _cleanupOutput?.Clear();
         }
 
         private void PickCleanupFolder()
@@ -1658,11 +1694,25 @@ namespace VSOfflineTool
             if (_oldModulesList == null)
                 return;
 
-            if (string.IsNullOrWhiteSpace(SharedFolderPath) ||
-                !Directory.Exists(SharedFolderPath))
+            if (string.IsNullOrWhiteSpace(SharedFolderPath))
             {
                 _oldModulesList.Items.Clear();
                 _oldModules.Clear();
+
+                AppendCleanupLog(
+                    "No offline layout folder is selected.");
+
+                return;
+            }
+
+            if (!Directory.Exists(SharedFolderPath))
+            {
+                _oldModulesList.Items.Clear();
+                _oldModules.Clear();
+
+                AppendCleanupLog(
+                    $"Offline layout folder does not exist: {SharedFolderPath}");
+
                 return;
             }
 
@@ -1672,35 +1722,68 @@ namespace VSOfflineTool
         private void LoadCleanupList(string folder)
         {
             _oldModulesList.Items.Clear();
-            _oldModules = CleanupHelper.FindOldVersionFolders(folder);
 
-            foreach (var module in _oldModules)
+            try
             {
-                var item = new ListViewItem(module.Name) { Checked = true, Tag = module };
-                item.SubItems.Add(module.Version);
-                _oldModulesList.Items.Add(item);
+                _oldModules = CleanupHelper.FindOldVersionFolders(folder);
+
+                foreach (var module in _oldModules)
+                {
+                    var item = new ListViewItem(module.Name)
+                    {
+                        Checked = true,
+                        Tag = module
+                    };
+
+                    item.SubItems.Add(module.Version);
+                    _oldModulesList.Items.Add(item);
+                }
+
+                if (_oldModules.Count == 0)
+                {
+                    AppendCleanupLog(
+                        "No old-version folders were found in the selected offline layout.");
+
+                    return;
+                }
+
+                AppendCleanupLog(
+                    $"Found {_oldModules.Count} old-version folder(s).");
+
+                foreach (var module in _oldModules)
+                {
+                    AppendCleanupLog(
+                        $"  {module.Name}  |  Version: {module.Version}");
+                }
             }
-
-            if (_oldModules.Count == 0)
+            catch (Exception ex)
             {
-                MessageBox.Show(
-                    "No old-version folders were found in the selected offline layout.",
-                    "Cleanup",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Information);
+                _oldModules.Clear();
+
+                AppendCleanupLog(
+                    $"Failed to scan cleanup folder: {ex.GetType().Name}");
+
+                AppendCleanupLog(
+                    $"Details: {ex.Message}");
             }
         }
 
         private void DeleteOldVersions()
         {
-            var checkedItems = _oldModulesList.Items.Cast<ListViewItem>().Where(i => i.Checked).ToList();
+            ClearCleanupLog();
 
-            // Mirrors the original tool's behavior (and the note above the
-            // list): with no per-item selection UI at all in the original,
-            // it always deletes the entire discovered list. We keep the
-            // checkboxes as a convenience, but if the user has unchecked
-            // everything we fall back to "delete all" rather than doing nothing.
-            var toDelete = (checkedItems.Count > 0
+            AppendCleanupLog("Starting old-version cleanup...");
+            AppendCleanupLog($"Layout folder: {SharedFolderPath}");
+
+            var checkedItems =
+                _oldModulesList.Items
+                    .Cast<ListViewItem>()
+                    .Where(i => i.Checked)
+                    .ToList();
+
+            // If nothing is checked, delete all discovered modules.
+            var toDelete =
+                (checkedItems.Count > 0
                     ? checkedItems
                     : _oldModulesList.Items.Cast<ListViewItem>())
                 .Select(i => i.Tag as VsModule)
@@ -1709,32 +1792,66 @@ namespace VSOfflineTool
 
             if (toDelete.Count == 0)
             {
-                MessageBox.Show("Old version folder does not exist.");
+                AppendCleanupLog(
+                    "Nothing to delete. No old-version folders were found.");
+
                 return;
             }
 
+            AppendCleanupLog(
+                $"Selected {toDelete.Count} folder(s) for deletion.");
+
+            foreach (var module in toDelete)
+            {
+                AppendCleanupLog(
+                    $"  Delete: {module.Name} | Version: {module.Version}");
+            }
+
+            // This is intentionally the only confirmation dialog.
             var confirm = MessageBox.Show(
                 $"Delete {toDelete.Count} folder(s)? This cannot be undone.",
-                "Confirm", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+                "Confirm",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning);
 
             if (confirm != DialogResult.Yes)
+            {
+                AppendCleanupLog("Operation cancelled by user.");
                 return;
+            }
+
+            AppendCleanupLog("User confirmed deletion.");
 
             try
             {
                 Cursor = Cursors.WaitCursor;
+                _deleteOldButton.Enabled = false;
+
+                AppendCleanupLog("Deleting old-version folders...");
+
                 CleanupHelper.DeleteFolders(toDelete);
+
+                AppendCleanupLog(
+                    $"Successfully deleted {toDelete.Count} folder(s).");
+
+                AppendCleanupLog("Refreshing old-version list...");
+
                 LoadCleanupList(SharedFolderPath);
 
-                MessageBox.Show("Operation successful.", "Cleanup", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                AppendCleanupLog("Cleanup operation completed successfully.");
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Error occured: " + ex.GetType(), "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                AppendCleanupLog(
+                    $"Cleanup failed: {ex.GetType().Name}");
+
+                AppendCleanupLog(
+                    $"Details: {ex.Message}");
             }
             finally
             {
                 Cursor = Cursors.Default;
+                _deleteOldButton.Enabled = true;
             }
         }
 
@@ -1742,17 +1859,26 @@ namespace VSOfflineTool
         // OFFICIAL VISUAL STUDIO --clean
         // ============================================================
 
-        private void RunOfficialCleanup()
+        private async void RunOfficialCleanup()
         {
+            ClearCleanupLog();
+
+            AppendCleanupLog("Starting Visual Studio --clean...");
+            AppendCleanupLog($"Layout folder: {SharedFolderPath}");
+
             if (string.IsNullOrWhiteSpace(SharedFolderPath))
             {
-                MessageBox.Show("Select an offline layout folder first.");
+                AppendCleanupLog(
+                    "ERROR: No offline layout folder is selected.");
+
                 return;
             }
 
             if (!Directory.Exists(SharedFolderPath))
             {
-                MessageBox.Show("The selected offline layout folder does not exist.");
+                AppendCleanupLog(
+                    "ERROR: The selected offline layout folder does not exist.");
+
                 return;
             }
 
@@ -1762,11 +1888,8 @@ namespace VSOfflineTool
 
             if (!File.Exists(catalogPath))
             {
-                MessageBox.Show(
-                    "Catalog.json was not found in the selected offline layout.",
-                    "Cleanup",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Warning);
+                AppendCleanupLog(
+                    $"ERROR: Catalog.json was not found: {catalogPath}");
 
                 return;
             }
@@ -1777,11 +1900,8 @@ namespace VSOfflineTool
 
             if (!File.Exists(setupPath))
             {
-                MessageBox.Show(
-                    "vs_setup.exe was not found in the selected offline layout.",
-                    "Cleanup",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Warning);
+                AppendCleanupLog(
+                    $"ERROR: vs_setup.exe was not found: {setupPath}");
 
                 return;
             }
@@ -1790,6 +1910,10 @@ namespace VSOfflineTool
                 $"--layout \"{SharedFolderPath}\" " +
                 $"--clean \"{catalogPath}\"";
 
+            AppendCleanupLog($"Executable: {setupPath}");
+            AppendCleanupLog($"Arguments: {arguments}");
+
+            // This is intentionally the only confirmation dialog.
             var confirm = MessageBox.Show(
                 "Visual Studio --clean will now run against the selected offline layout.\n\n" +
                 "No command file will be created.",
@@ -1798,26 +1922,103 @@ namespace VSOfflineTool
                 MessageBoxIcon.Information);
 
             if (confirm != DialogResult.Yes)
+            {
+                AppendCleanupLog("Operation cancelled by user.");
                 return;
+            }
+
+            AppendCleanupLog("User confirmed Visual Studio --clean.");
+            AppendCleanupLog("Starting vs_setup.exe...");
 
             try
             {
-                Process.Start(new ProcessStartInfo
+                var psi = new ProcessStartInfo
                 {
                     FileName = setupPath,
                     Arguments = arguments,
                     WorkingDirectory = SharedFolderPath,
-                    UseShellExecute = true,
-                });
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                };
+
+                using var process = new Process
+                {
+                    StartInfo = psi,
+                    EnableRaisingEvents = true
+                };
+
+                process.OutputDataReceived += (s, e) =>
+                {
+                    if (!string.IsNullOrWhiteSpace(e.Data))
+                        AppendCleanupLog(e.Data);
+                };
+
+                process.ErrorDataReceived += (s, e) =>
+                {
+                    if (!string.IsNullOrWhiteSpace(e.Data))
+                        AppendCleanupLog("ERROR: " + e.Data);
+                };
+
+                if (!process.Start())
+                {
+                    AppendCleanupLog(
+                        "ERROR: Failed to start vs_setup.exe.");
+
+                    return;
+                }
+
+                process.BeginOutputReadLine();
+                process.BeginErrorReadLine();
+
+                AppendCleanupLog(
+                    $"Process started. PID: {process.Id}");
+
+                await WaitForProcessExitAsync(process);
+
+                // Ensure all asynchronous stdout/stderr events are flushed.
+                process.WaitForExit();
+
+                AppendCleanupLog(
+                    $"Visual Studio --clean finished. Exit code: {process.ExitCode}");
+
+                if (process.ExitCode == 0)
+                {
+                    AppendCleanupLog(
+                        "Visual Studio --clean completed successfully.");
+                }
+                else
+                {
+                    AppendCleanupLog(
+                        "Visual Studio --clean finished with an error.");
+                }
             }
             catch (Exception ex)
             {
-                MessageBox.Show(
-                    "Error occured: " + ex.GetType(),
-                    "Error",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Error);
+                AppendCleanupLog(
+                    $"Failed to run Visual Studio --clean: {ex.GetType().Name}");
+
+                AppendCleanupLog(
+                    $"Details: {ex.Message}");
             }
+        }
+
+        private static Task WaitForProcessExitAsync(Process process)
+        {
+            var tcs = new TaskCompletionSource<object>();
+
+            process.EnableRaisingEvents = true;
+
+            process.Exited += (s, e) =>
+            {
+                tcs.TrySetResult(null);
+            };
+
+            if (process.HasExited)
+                tcs.TrySetResult(null);
+
+            return tcs.Task;
         }
 
         // ============================================================

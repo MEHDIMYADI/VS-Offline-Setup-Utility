@@ -27,7 +27,7 @@ namespace VSOfflineTool
     internal static class SettingsStore
     {
         private static readonly string SettingsFile =
-            Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "settings.txt");
+            Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "VSOfflineTool.config");
 
         public static AppSettings Load()
         {
