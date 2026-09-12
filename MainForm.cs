@@ -9,8 +9,6 @@ using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
-using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
@@ -104,10 +102,10 @@ namespace VSOfflineTool
             var footer = new Label
             {
                 Dock = DockStyle.Bottom,
-                Height = 36,
+                Height = 30,
                 Text = "VS Offline Setup Utility — No warranty provided. Not affiliated with Microsoft or any third party. No user data is collected.",
                 ForeColor = SystemColors.GrayText,
-                Font = new Font("Segoe UI", 7.5f),
+                Font = new Font("Segoe UI", 8f),
                 TextAlign = ContentAlignment.MiddleCenter,
             };
 
@@ -303,23 +301,53 @@ namespace VSOfflineTool
         {
             var page = new TabPage("Download");
 
-            var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, Padding = new Padding(8) };
-            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));   // options row
-            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));   // note label
-            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 55)); // tree
-            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));   // cli label
-            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 20)); // cli box
-            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));   // preview
-            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));   // download button
+            var layout = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 1,
+                Padding = new Padding(8)
+            };
 
-            // ---------------- TOP ROW ----------------
+            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));    // options
+            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));    // folder
+            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));    // note
+            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 38)); // workloads
+            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 18)); // installer command
+            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 24)); // update preview
 
-            var topRow = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, WrapContents = true };
+            // =========================
+            // INSTALLATION OPTIONS
+            // =========================
 
-            _editionCombo = new ComboBox { Width = 250, DropDownStyle = ComboBoxStyle.DropDownList };
+            var optionsGroup = new GroupBox
+            {
+                Text = "Installation options",
+                Dock = DockStyle.Top,
+                AutoSize = true,
+                Padding = new Padding(10, 6, 10, 10),
+                Margin = new Padding(0, 0, 0, 6)
+            };
+
+            var optionsFlow = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                AutoSize = true,
+                WrapContents = true,
+                FlowDirection = FlowDirection.LeftToRight
+            };
+
+            _editionCombo = new ComboBox
+            {
+                Width = 250,
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                Margin = new Padding(3)
+            };
+
             foreach (var edition in VsEditionCatalog.GetAll())
                 _editionCombo.Items.Add(edition);
+
             _editionCombo.DisplayMember = "Name";
+
             _editionCombo.SelectedIndexChanged += async (s, e) =>
             {
                 if (_loadingSettings)
@@ -328,14 +356,24 @@ namespace VSOfflineTool
                 SaveSettings();
                 await LoadWorkloadsAsync();
             };
-            topRow.Controls.Add(Labeled("Edition:", _editionCombo));
 
-            _languageCombo = new ComboBox { Width = 90, DropDownStyle = ComboBoxStyle.DropDownList };
+            optionsFlow.Controls.Add(Labeled("Edition:", _editionCombo));
+
+
+            _languageCombo = new ComboBox
+            {
+                Width = 100,
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                Margin = new Padding(3)
+            };
+
             _languageCombo.Items.AddRange(new object[]
             {
-                "cs-CZ", "de-DE", "en-US", "es-ES", "fr-FR", "it-IT", "ja-JP",
-                "ko-KR", "pl-PL", "pt-BR", "ru-RU", "tr-TR", "zh-CN", "zh-TW"
+                "cs-CZ", "de-DE", "en-US", "es-ES", "fr-FR",
+                "it-IT", "ja-JP", "ko-KR", "pl-PL", "pt-BR",
+                "ru-RU", "tr-TR", "zh-CN", "zh-TW"
             });
+
             _languageCombo.SelectedIndexChanged += (s, e) =>
             {
                 ComponentSettings.Language =
@@ -347,9 +385,17 @@ namespace VSOfflineTool
                 SaveSettings();
                 RegenerateCli();
             };
-            topRow.Controls.Add(Labeled("Language:", _languageCombo));
 
-            _recommendedCheck = new CheckBox { Text = "Include recommended", AutoSize = true, Margin = new Padding(12, 8, 3, 3) };
+            optionsFlow.Controls.Add(Labeled("Language:", _languageCombo));
+
+
+            _recommendedCheck = new CheckBox
+            {
+                Text = "Include recommended",
+                AutoSize = true,
+                Margin = new Padding(18, 26, 3, 3)
+            };
+
             _recommendedCheck.CheckedChanged += (s, e) =>
             {
                 ComponentSettings.IsRecommended = _recommendedCheck.Checked;
@@ -361,9 +407,17 @@ namespace VSOfflineTool
                 RefreshAllTreeStates();
                 RegenerateCli();
             };
-            topRow.Controls.Add(_recommendedCheck);
 
-            _optionalCheck = new CheckBox { Text = "Include optional", AutoSize = true, Margin = new Padding(12, 8, 3, 3) };
+            optionsFlow.Controls.Add(_recommendedCheck);
+
+
+            _optionalCheck = new CheckBox
+            {
+                Text = "Include optional",
+                AutoSize = true,
+                Margin = new Padding(12, 26, 3, 3)
+            };
+
             _optionalCheck.CheckedChanged += (s, e) =>
             {
                 ComponentSettings.IsOptional = _optionalCheck.Checked;
@@ -375,56 +429,166 @@ namespace VSOfflineTool
                 RefreshAllTreeStates();
                 RegenerateCli();
             };
-            topRow.Controls.Add(_optionalCheck);
 
-            var folderButton = new Button { Text = "Select folder...", AutoSize = true, Margin = new Padding(12, 3, 3, 3) };
+            optionsFlow.Controls.Add(_optionalCheck);
+
+            optionsGroup.Controls.Add(optionsFlow);
+            layout.Controls.Add(optionsGroup, 0, 0);
+
+
+            // =========================
+            // DESTINATION FOLDER
+            // =========================
+
+            var folderGroup = new GroupBox
+            {
+                Text = "Destination folder",
+                Dock = DockStyle.Top,
+                AutoSize = true,
+                Padding = new Padding(10, 6, 10, 10),
+                Margin = new Padding(0, 0, 0, 6)
+            };
+
+            var folderFlow = new TableLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                AutoSize = true,
+                ColumnCount = 2,
+                RowCount = 1
+            };
+
+            folderFlow.ColumnStyles.Add(
+                new ColumnStyle(SizeType.AutoSize));
+
+            folderFlow.ColumnStyles.Add(
+                new ColumnStyle(SizeType.Percent, 100));
+
+
+            var folderButton = new Button
+            {
+                Text = "Select folder...",
+                AutoSize = true,
+                Margin = new Padding(3)
+            };
+
             folderButton.Click += (s, e) => PickDownloadFolder();
-            topRow.Controls.Add(folderButton);
 
-            _folderBox = new TextBox { Width = 400, ReadOnly = false, Margin = new Padding(3, 8, 3, 3) };
+            folderFlow.Controls.Add(folderButton, 0, 0);
+
+
+            _folderBox = new TextBox
+            {
+                Dock = DockStyle.Fill,
+                Margin = new Padding(6, 4, 3, 3)
+            };
+
             _folderBox.TextChanged += FolderBox_TextChanged;
-            topRow.Controls.Add(_folderBox);
 
-            layout.Controls.Add(topRow, 0, 0);
+            folderFlow.Controls.Add(_folderBox, 1, 0);
 
-            // ---------------- NOTE (mirrors the original app's guidance text) ----------------
+            folderGroup.Controls.Add(folderFlow);
+            layout.Controls.Add(folderGroup, 0, 1);
+
+
+            // =========================
+            // NOTE
+            // =========================
 
             var noteLabel = new Label
             {
                 AutoSize = true,
                 MaximumSize = new Size(950, 0),
                 ForeColor = SystemColors.ControlDarkDark,
-                Font = new Font("Segoe UI", 8.25f, FontStyle.Italic),
-                Margin = new Padding(3, 0, 3, 6),
-                Text = "Note: If no checkbox below is selected, all workload packages will be installed " +
-                       "(the CLI command is generated without any --add switch, so the installer falls back " +
-                       "to its full default layout). Check individual workloads/components to customize the selection.",
-            };
-            layout.Controls.Add(noteLabel, 0, 1);
+                Font = new Font(
+                    "Segoe UI",
+                    8.25f,
+                    FontStyle.Italic),
+                Margin = new Padding(3, 4, 3, 6),
 
-            // ---------------- WORKLOAD TREE ----------------
+                Text =
+                    "Note: If no checkbox below is selected, all workload packages will be installed " +
+                    "(the CLI command is generated without any --add switch, so the installer falls back " +
+                    "to its full default layout). Check individual workloads/components to customize the selection."
+            };
+
+            layout.Controls.Add(noteLabel, 0, 2);
+
+
+            // =========================
+            // WORKLOADS
+            // =========================
+
+            var workloadGroup = new GroupBox
+            {
+                Text = "Workloads",
+                Dock = DockStyle.Fill,
+                Padding = new Padding(6, 10, 6, 6),
+                Margin = new Padding(0, 0, 0, 6)
+            };
 
             _workloadTree = new TreeView
             {
                 Dock = DockStyle.Fill,
-                CheckBoxes = false, // we render our own 3-state checkbox glyphs via StateImageList
+                CheckBoxes = false,
                 StateImageList = _treeStateImages,
                 HideSelection = false,
                 ShowNodeToolTips = true,
-                FullRowSelect = false,
+                FullRowSelect = false
             };
+
             _workloadTree.MouseDown += WorkloadTree_MouseDown;
-            layout.Controls.Add(_workloadTree, 0, 2);
 
-            var cliLabel = new Label
+            workloadGroup.Controls.Add(_workloadTree);
+            layout.Controls.Add(workloadGroup, 0, 3);
+
+
+            // =========================
+            // INSTALLER COMMAND
+            // =========================
+
+            var cliGroup = new GroupBox
             {
-                AutoSize = true,
-                Margin = new Padding(3, 6, 3, 0),
-                Text = "Command Prompt will execute the command below:",
+                Text = "Installer command",
+                Dock = DockStyle.Fill,
+                Padding = new Padding(8, 12, 8, 8),
+                Margin = new Padding(0, 0, 0, 6)
             };
-            layout.Controls.Add(cliLabel, 0, 3);
 
-            // ---------------- CLI PREVIEW ----------------
+            var cliLayout = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 1,
+                RowCount = 2
+            };
+
+            cliLayout.RowStyles.Add(
+                new RowStyle(SizeType.AutoSize));
+
+            cliLayout.RowStyles.Add(
+                new RowStyle(SizeType.Percent, 100));
+
+
+            // =========================
+            // DOWNLOAD BUTTON
+            // =========================
+
+            _downloadButton = new Button
+            {
+                Text = "Download setup && run",
+                AutoSize = true,
+                Anchor = AnchorStyles.Left,
+                Margin = new Padding(3, 0, 3, 6)
+            };
+
+            _downloadButton.Click += async (s, e) =>
+                await DownloadAndRunAsync();
+
+            cliLayout.Controls.Add(_downloadButton,0,0);
+
+
+            // =========================
+            // COMMAND PREVIEW
+            // =========================
 
             _cliPreview = new TextBox
             {
@@ -433,32 +597,57 @@ namespace VSOfflineTool
                 ReadOnly = true,
                 ScrollBars = ScrollBars.Vertical,
                 Font = new Font("Consolas", 9),
+                Margin = new Padding(3)
             };
-            layout.Controls.Add(_cliPreview, 0, 4);
 
-            // ---------------- PREVIEW ----------------
+            cliLayout.Controls.Add(_cliPreview,0,1);
 
-            var previewPanel = new TableLayoutPanel
+            cliGroup.Controls.Add(cliLayout);
+
+            layout.Controls.Add(cliGroup,0,4);
+
+            // =========================
+            // UPDATE PREVIEW
+            // =========================
+
+            var previewGroup = new GroupBox
+            {
+                Text = "Update preview",
+                Dock = DockStyle.Fill,
+                Padding = new Padding(8, 12, 8, 8),
+                Margin = new Padding(0)
+            };
+
+            var previewLayout = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
                 ColumnCount = 1,
-                RowCount = 3,
-                AutoSize = true,
-                Margin = new Padding(0, 6, 0, 0)
+                RowCount = 3
             };
+
+            previewLayout.RowStyles.Add(
+                new RowStyle(SizeType.AutoSize));
+
+            previewLayout.RowStyles.Add(
+                new RowStyle(SizeType.AutoSize));
+
+            previewLayout.RowStyles.Add(
+                new RowStyle(SizeType.Percent, 100));
+
 
             _previewButton = new Button
             {
                 Text = "Preview Update",
                 AutoSize = true,
                 Anchor = AnchorStyles.Left,
-                Margin = new Padding(3, 3, 3, 3)
+                Margin = new Padding(3)
             };
 
             _previewButton.Click += async (s, e) =>
                 await PreviewLayoutAsync();
 
-            previewPanel.Controls.Add(_previewButton, 0, 0);
+            previewLayout.Controls.Add(_previewButton,0,0);
+
 
             _previewLabel = new Label
             {
@@ -467,7 +656,10 @@ namespace VSOfflineTool
                 Margin = new Padding(3, 6, 3, 3)
             };
 
-            previewPanel.Controls.Add(_previewLabel, 0, 1);
+            previewLayout.Controls.Add(
+                _previewLabel,
+                0,
+                1);
 
             _previewOutput = new TextBox
             {
@@ -476,29 +668,17 @@ namespace VSOfflineTool
                 ReadOnly = true,
                 ScrollBars = ScrollBars.Vertical,
                 Font = new Font("Consolas", 8.5f),
-                Height = 180,
-                Margin = new Padding(3, 3, 3, 3)
+                Margin = new Padding(3)
             };
 
-            previewPanel.Controls.Add(_previewOutput, 0, 2);
+            previewLayout.Controls.Add(_previewOutput,0,2);
 
-            layout.Controls.Add(previewPanel, 0, 5);
+            previewGroup.Controls.Add(previewLayout);
 
-            // ---------------- DOWNLOAD BUTTON ----------------
-
-            _downloadButton = new Button
-            {
-                Text = "Download setup && generate .bat",
-                AutoSize = true,
-                Margin = new Padding(3, 8, 3, 3),
-            };
-
-            _downloadButton.Click += async (s, e) =>
-                await DownloadAndRunAsync();
-
-            layout.Controls.Add(_downloadButton, 0, 6);
+            layout.Controls.Add(previewGroup,0,5);
 
             page.Controls.Add(layout);
+
             return page;
         }
 
@@ -831,28 +1011,37 @@ namespace VSOfflineTool
 
             SaveSettings();
 
-            var setupDir = Directory.CreateDirectory(Path.Combine(SharedFolderPath, "Setup"));
-            var exePath = Path.Combine(setupDir.FullName, edition.Name.Replace(' ', '_') + ".exe");
-            var batPath = Path.Combine(setupDir.FullName, "CliCommand.bat");
+            var setupDir = Directory.CreateDirectory(
+                Path.Combine(SharedFolderPath, "Setup"));
+
+            var exePath = Path.Combine(
+                setupDir.FullName,
+                edition.Name.Replace(' ', '_') + ".exe");
 
             Cursor = Cursors.WaitCursor;
             _downloadButton.Enabled = false;
+
             try
             {
                 var bytes = await _http.GetByteArrayAsync(edition.SetupUri);
                 File.WriteAllBytes(exePath, bytes);
-                File.WriteAllText(batPath, _cliPreview.Text, Encoding.ASCII);
 
                 Process.Start(new ProcessStartInfo
                 {
-                    FileName = batPath,
+                    FileName = exePath,
+                    Arguments = _cliPreview.Text.Substring(
+                        _cliPreview.Text.IndexOf(' ') + 1),
                     WorkingDirectory = setupDir.FullName,
                     UseShellExecute = true,
                 });
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Error occured: " + ex.GetType(), "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(
+                    "Error occured: " + ex.GetType(),
+                    "Error",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
             }
             finally
             {
@@ -1045,8 +1234,6 @@ namespace VSOfflineTool
                 string[] selectedComponents =
                     GetSelectedComponentIds();
 
-                string downloadUrl;
-
                 string exeCommand =
                     _layoutAnalyzer.BuildPreviewCommandLine(
                         layoutFolder,
@@ -1058,7 +1245,7 @@ namespace VSOfflineTool
                         _recommendedCheck.Checked,
                         _optionalCheck.Checked,
                         out string error,
-                        out downloadUrl);
+                        out string downloadUrl);
 
                 if (exeCommand == null)
                 {
@@ -1250,39 +1437,120 @@ namespace VSOfflineTool
         {
             var page = new TabPage("Cleanup");
 
-            var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, Padding = new Padding(8) };
-            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize)); // folder row
-            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize)); // note
-            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); // list
-            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize)); // buttons
+            var layout = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 1,
+                Padding = new Padding(8)
+            };
 
-            // ---------------- FOLDER ----------------
+            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
-            var topRow = new FlowLayoutPanel { AutoSize = true, WrapContents = true };
 
-            var folderButton = new Button { Text = "Select offline layout folder...", AutoSize = true, Margin = new Padding(3) };
-            folderButton.Click += (s, e) => PickCleanupFolder();
-            topRow.Controls.Add(folderButton);
+            // =========================
+            // FOLDER
+            // =========================
 
-            _cleanupFolderBox = new TextBox { Width = 550, ReadOnly = false, Margin = new Padding(3, 6, 3, 3) };
+            var folderGroup = new GroupBox
+            {
+                Text = "Offline layout folder",
+                Dock = DockStyle.Top,
+                AutoSize = true,
+                Padding = new Padding(10, 6, 10, 10),
+                Margin = new Padding(0, 0, 0, 6)
+            };
+
+            var topRow = new TableLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                AutoSize = true,
+                ColumnCount = 2
+            };
+
+            topRow.ColumnStyles.Add(
+                new ColumnStyle(SizeType.AutoSize));
+
+            topRow.ColumnStyles.Add(
+                new ColumnStyle(SizeType.Percent, 100));
+
+
+            var folderButton = new Button
+            {
+                Text = "Select offline layout folder...",
+                AutoSize = true,
+                Margin = new Padding(3)
+            };
+
+            folderButton.Click += (s, e) =>
+                PickCleanupFolder();
+
+            topRow.Controls.Add(
+                folderButton,
+                0,
+                0);
+
+
+            _cleanupFolderBox = new TextBox
+            {
+                Dock = DockStyle.Fill,
+                Margin = new Padding(6, 4, 3, 3)
+            };
+
             _cleanupFolderBox.TextChanged += FolderBox_TextChanged;
-            topRow.Controls.Add(_cleanupFolderBox);
 
-            layout.Controls.Add(topRow, 0, 0);
+            topRow.Controls.Add(
+                _cleanupFolderBox,
+                1,
+                0);
+
+            folderGroup.Controls.Add(topRow);
+
+            layout.Controls.Add(
+                folderGroup,
+                0,
+                0);
+
+
+            // =========================
+            // NOTE
+            // =========================
 
             var noteLabel = new Label
             {
                 AutoSize = true,
                 MaximumSize = new Size(950, 0),
                 ForeColor = SystemColors.ControlDarkDark,
-                Font = new Font("Segoe UI", 8.25f, FontStyle.Italic),
-                Margin = new Padding(3, 0, 3, 6),
-                Text = "Note: If no checkbox below is selected, all listed old-version folders will be deleted " +
-                       "(same as the original tool, which has no per-item selection at all).",
-            };
-            layout.Controls.Add(noteLabel, 0, 1);
+                Font = new Font(
+                    "Segoe UI",
+                    8.25f,
+                    FontStyle.Italic),
+                Margin = new Padding(3, 4, 3, 6),
 
-            // ---------------- OLD MODULES ----------------
+                Text =
+                    "Note: If no checkbox below is selected, all listed old-version folders will be deleted " +
+                    "(same as the original tool, which has no per-item selection at all)."
+            };
+
+            layout.Controls.Add(
+                noteLabel,
+                0,
+                1);
+
+
+            // =========================
+            // OLD MODULES
+            // =========================
+
+            var modulesGroup = new GroupBox
+            {
+                Text = "Old versions",
+                Dock = DockStyle.Fill,
+                Padding = new Padding(6, 10, 6, 6),
+                Margin = new Padding(0, 0, 0, 6)
+            };
 
             _oldModulesList = new ListView
             {
@@ -1290,27 +1558,85 @@ namespace VSOfflineTool
                 View = View.Details,
                 FullRowSelect = true,
                 CheckBoxes = true,
-                HideSelection = false,
+                HideSelection = false
             };
-            _oldModulesList.Columns.Add("Module", 500);
-            _oldModulesList.Columns.Add("Version", 180);
-            layout.Controls.Add(_oldModulesList, 0, 2);
 
-            // ---------------- BUTTONS ----------------
+            _oldModulesList.Columns.Add(
+                "Module",
+                500);
 
-            var buttons = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill };
+            _oldModulesList.Columns.Add(
+                "Version",
+                180);
 
-            _deleteOldButton = new Button { Text = "Delete old versions", AutoSize = true, Margin = new Padding(3, 8, 3, 3) };
-            _deleteOldButton.Click += (s, e) => DeleteOldVersions();
-            buttons.Controls.Add(_deleteOldButton);
+            modulesGroup.Controls.Add(
+                _oldModulesList);
 
-            _officialCleanButton = new Button { Text = "Run Visual Studio --clean", AutoSize = true, Margin = new Padding(12, 8, 3, 3) };
-            _officialCleanButton.Click += (s, e) => RunOfficialCleanup();
-            buttons.Controls.Add(_officialCleanButton);
+            layout.Controls.Add(
+                modulesGroup,
+                0,
+                2);
 
-            layout.Controls.Add(buttons, 0, 3);
+
+            // =========================
+            // BUTTONS
+            // =========================
+
+            var buttonsGroup = new GroupBox
+            {
+                Text = "Cleanup actions",
+                Dock = DockStyle.Top,
+                AutoSize = true,
+                Padding = new Padding(8, 6, 8, 8),
+                Margin = new Padding(0)
+            };
+
+            var buttons = new FlowLayoutPanel
+            {
+                AutoSize = true,
+                Dock = DockStyle.Top,
+                WrapContents = false
+            };
+
+
+            _deleteOldButton = new Button
+            {
+                Text = "Delete old versions",
+                AutoSize = true,
+                Margin = new Padding(3)
+            };
+
+            _deleteOldButton.Click += (s, e) =>
+                DeleteOldVersions();
+
+            buttons.Controls.Add(
+                _deleteOldButton);
+
+
+            _officialCleanButton = new Button
+            {
+                Text = "Run Visual Studio --clean",
+                AutoSize = true,
+                Margin = new Padding(12, 3, 3, 3)
+            };
+
+            _officialCleanButton.Click += (s, e) =>
+                RunOfficialCleanup();
+
+            buttons.Controls.Add(
+                _officialCleanButton);
+
+
+            buttonsGroup.Controls.Add(buttons);
+
+            layout.Controls.Add(
+                buttonsGroup,
+                0,
+                3);
+
 
             page.Controls.Add(layout);
+
             return page;
         }
 
@@ -1430,39 +1756,67 @@ namespace VSOfflineTool
                 return;
             }
 
-            var catalogPath = Path.Combine(SharedFolderPath, "Catalog.json");
+            var catalogPath = Path.Combine(
+                SharedFolderPath,
+                "Catalog.json");
+
             if (!File.Exists(catalogPath))
             {
-                MessageBox.Show("Catalog.json was not found in the selected offline layout.",
-                    "Cleanup", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(
+                    "Catalog.json was not found in the selected offline layout.",
+                    "Cleanup",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+
                 return;
             }
 
-            var command = $"vs_setup.exe --layout \"{SharedFolderPath}\" --clean \"{catalogPath}\"";
-            var batPath = Path.Combine(SharedFolderPath, "CleanupCommand.bat");
+            var setupPath = Path.Combine(
+                SharedFolderPath,
+                "vs_setup.exe");
+
+            if (!File.Exists(setupPath))
+            {
+                MessageBox.Show(
+                    "vs_setup.exe was not found in the selected offline layout.",
+                    "Cleanup",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+
+                return;
+            }
+
+            var arguments =
+                $"--layout \"{SharedFolderPath}\" " +
+                $"--clean \"{catalogPath}\"";
+
+            var confirm = MessageBox.Show(
+                "Visual Studio --clean will now run against the selected offline layout.\n\n" +
+                "No command file will be created.",
+                "Run Visual Studio --clean",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Information);
+
+            if (confirm != DialogResult.Yes)
+                return;
 
             try
             {
-                File.WriteAllText(batPath, command, Encoding.ASCII);
-
-                var confirm = MessageBox.Show(
-                    "A CleanupCommand.bat file will be created in the layout folder and executed.\n\n" +
-                    "This uses Visual Studio's --clean mechanism.",
-                    "Run Visual Studio --clean", MessageBoxButtons.YesNo, MessageBoxIcon.Information);
-
-                if (confirm != DialogResult.Yes)
-                    return;
-
                 Process.Start(new ProcessStartInfo
                 {
-                    FileName = batPath,
+                    FileName = setupPath,
+                    Arguments = arguments,
                     WorkingDirectory = SharedFolderPath,
                     UseShellExecute = true,
                 });
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Error occured: " + ex.GetType(), "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(
+                    "Error occured: " + ex.GetType(),
+                    "Error",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
             }
         }
 
