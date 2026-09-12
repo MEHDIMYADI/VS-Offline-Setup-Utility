@@ -10,6 +10,7 @@ using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
@@ -26,6 +27,13 @@ namespace VSOfflineTool
         // Prevent control-change events from overwriting saved settings
         // while the initial settings are being restored.
         private bool _loadingSettings;
+
+        // ---------------- Layout Analyzer ----------------
+
+        private readonly LayoutAnalyzer _layoutAnalyzer = new LayoutAnalyzer();
+        private Button _previewButton;
+        private Label _previewLabel;
+        private TextBox _previewOutput;
 
         // ---------------- DOWNLOAD ----------------
 
@@ -301,6 +309,7 @@ namespace VSOfflineTool
             layout.RowStyles.Add(new RowStyle(SizeType.Percent, 55)); // tree
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));   // cli label
             layout.RowStyles.Add(new RowStyle(SizeType.Percent, 20)); // cli box
+            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));   // preview
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));   // download button
 
             // ---------------- TOP ROW ----------------
@@ -427,6 +436,54 @@ namespace VSOfflineTool
             };
             layout.Controls.Add(_cliPreview, 0, 4);
 
+            // ---------------- PREVIEW ----------------
+
+            var previewPanel = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 1,
+                RowCount = 3,
+                AutoSize = true,
+                Margin = new Padding(0, 6, 0, 0)
+            };
+
+            _previewButton = new Button
+            {
+                Text = "Preview Update",
+                AutoSize = true,
+                Anchor = AnchorStyles.Left,
+                Margin = new Padding(3, 3, 3, 3)
+            };
+
+            _previewButton.Click += async (s, e) =>
+                await PreviewLayoutAsync();
+
+            previewPanel.Controls.Add(_previewButton, 0, 0);
+
+            _previewLabel = new Label
+            {
+                AutoSize = true,
+                Text = "Update preview: not calculated",
+                Margin = new Padding(3, 6, 3, 3)
+            };
+
+            previewPanel.Controls.Add(_previewLabel, 0, 1);
+
+            _previewOutput = new TextBox
+            {
+                Dock = DockStyle.Fill,
+                Multiline = true,
+                ReadOnly = true,
+                ScrollBars = ScrollBars.Vertical,
+                Font = new Font("Consolas", 8.5f),
+                Height = 180,
+                Margin = new Padding(3, 3, 3, 3)
+            };
+
+            previewPanel.Controls.Add(_previewOutput, 0, 2);
+
+            layout.Controls.Add(previewPanel, 0, 5);
+
             // ---------------- DOWNLOAD BUTTON ----------------
 
             _downloadButton = new Button
@@ -435,8 +492,11 @@ namespace VSOfflineTool
                 AutoSize = true,
                 Margin = new Padding(3, 8, 3, 3),
             };
-            _downloadButton.Click += async (s, e) => await DownloadAndRunAsync();
-            layout.Controls.Add(_downloadButton, 0, 5);
+
+            _downloadButton.Click += async (s, e) =>
+                await DownloadAndRunAsync();
+
+            layout.Controls.Add(_downloadButton, 0, 6);
 
             page.Controls.Add(layout);
             return page;
@@ -452,14 +512,12 @@ namespace VSOfflineTool
 
         private void PickDownloadFolder()
         {
-            using (var dialog = new FolderBrowserDialog { Description = "Select the offline setup layout folder" })
-            {
-                if (Directory.Exists(SharedFolderPath))
-                    dialog.SelectedPath = SharedFolderPath;
+            using var dialog = new FolderBrowserDialog { Description = "Select the offline setup layout folder" };
+            if (Directory.Exists(SharedFolderPath))
+                dialog.SelectedPath = SharedFolderPath;
 
-                if (dialog.ShowDialog() == DialogResult.OK)
-                    SetSharedFolder(dialog.SelectedPath, reloadCleanup: true, save: true);
-            }
+            if (dialog.ShowDialog() == DialogResult.OK)
+                SetSharedFolder(dialog.SelectedPath, reloadCleanup: true, save: true);
         }
 
         private async Task LoadWorkloadsAsync()
@@ -563,35 +621,31 @@ namespace VSOfflineTool
 
                 if (indeterminate)
                 {
-                    using (var brush = new SolidBrush(
+                    using var brush = new SolidBrush(
                         dark
                             ? Color.FromArgb(160, 160, 160)
-                            : Color.FromArgb(90, 90, 90)))
-                    {
-                        graphics.FillRectangle(
-                            brush,
-                            new Rectangle(5, 7, 6, 2));
-                    }
+                            : Color.FromArgb(90, 90, 90));
+                    graphics.FillRectangle(
+                        brush,
+                        new Rectangle(5, 7, 6, 2));
                 }
                 else if (checkedState)
                 {
-                    using (var pen = new Pen(checkColor, 2f))
-                    {
-                        pen.StartCap =
-                            System.Drawing.Drawing2D.LineCap.Round;
+                    using var pen = new Pen(checkColor, 2f);
+                    pen.StartCap =
+                        System.Drawing.Drawing2D.LineCap.Round;
 
-                        pen.EndCap =
-                            System.Drawing.Drawing2D.LineCap.Round;
+                    pen.EndCap =
+                        System.Drawing.Drawing2D.LineCap.Round;
 
-                        graphics.DrawLines(
-                            pen,
-                            new[]
-                            {
+                    graphics.DrawLines(
+                        pen,
+                        new[]
+                        {
                         new Point(4, 8),
                         new Point(7, 11),
                         new Point(12, 5)
-                            });
-                    }
+                        });
                 }
             }
 
@@ -696,12 +750,12 @@ namespace VSOfflineTool
 
         private static int StateToImageIndex(CheckState state)
         {
-            switch (state)
+            return state switch
             {
-                case CheckState.Checked: return 1;
-                case CheckState.Indeterminate: return 2;
-                default: return 0;
-            }
+                CheckState.Checked => 1,
+                CheckState.Indeterminate => 2,
+                _ => 0,
+            };
         }
 
         // ============================================================
@@ -808,6 +862,387 @@ namespace VSOfflineTool
         }
 
         // ============================================================
+        // Preview Layout
+        // ============================================================
+
+        private async Task PreviewLayoutAsync()
+        {
+            if (_previewButton == null)
+                return;
+
+            _previewButton.Enabled = false;
+            _previewButton.Text = "Please wait...";
+
+            try
+            {
+                string layoutFolder = _folderBox.Text.Trim();
+
+                if (string.IsNullOrWhiteSpace(layoutFolder))
+                {
+                    MessageBox.Show(
+                        this,
+                        "Please select the layout folder first.",
+                        "Layout Preview",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning);
+
+                    return;
+                }
+
+                if (!Directory.Exists(layoutFolder))
+                {
+                    MessageBox.Show(
+                        this,
+                        "The selected layout folder does not exist.",
+                        "Layout Preview",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning);
+
+                    return;
+                }
+
+                if (!(_editionCombo.SelectedItem is VsEdition edition))
+                    return;
+
+                if (string.IsNullOrWhiteSpace(edition.ProductId))
+                    return;
+
+                // Microsoft Minimal Layout Tool does not officially support
+                // Visual Studio Community for this preview operation.
+                if (edition.Name.IndexOf(
+                    "Community",
+                    StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    MessageBox.Show(
+                        this,
+                        "Update preview is not officially supported for " +
+                        "Visual Studio Community by Microsoft's Minimal Layout Tool.",
+                        "Layout Preview",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Information);
+
+                    return;
+                }
+
+                // ------------------------------------------------------------
+                // STEP 1 - Read current layout version
+                // ------------------------------------------------------------
+
+                _previewOutput.Clear();
+
+                _previewLabel.Text =
+                    "Please wait... (Reading current layout version)";
+
+                await Task.Yield();
+
+                if (!TryReadLayoutVersion(
+                    layoutFolder,
+                    out string baseVersion))
+                {
+                    MessageBox.Show(
+                        this,
+                        "Could not determine the current Visual Studio " +
+                        "version from this layout.",
+                        "Layout Preview",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning);
+
+                    return;
+                }
+
+                // ------------------------------------------------------------
+                // STEP 2 - Check latest Visual Studio version
+                // ------------------------------------------------------------
+
+                _previewLabel.Text =
+                    "Please wait... (Checking latest Visual Studio version)";
+
+                await Task.Yield();
+
+                string targetVersion;
+
+                try
+                {
+                    targetVersion =
+                        await GetLatestVersionAsync(edition);
+                }
+                catch (HttpRequestException)
+                {
+                    _previewLabel.Text =
+                        "Preview unavailable: no internet connection.";
+
+                    MessageBox.Show(
+                        this,
+                        "An internet connection is required to check " +
+                        "the latest Visual Studio version.\r\n\r\n" +
+                        "The existing layout and normal download features " +
+                        "are still available.",
+                        "Layout Preview",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Information);
+
+                    return;
+                }
+                catch (TaskCanceledException)
+                {
+                    _previewLabel.Text =
+                        "Preview cancelled or timed out.";
+
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    _previewLabel.Text =
+                        "Could not determine latest version.";
+
+                    MessageBox.Show(
+                        this,
+                        "Could not determine the latest Visual Studio version.\r\n\r\n" +
+                        ex.Message,
+                        "Layout Preview",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Error);
+
+                    return;
+                }
+
+                // ------------------------------------------------------------
+                // STEP 3 - Already up to date?
+                // ------------------------------------------------------------
+
+                if (string.Equals(
+                    baseVersion,
+                    targetVersion,
+                    StringComparison.OrdinalIgnoreCase))
+                {
+                    _previewLabel.Text =
+                        $"Already up to date ({targetVersion}).";
+
+                    _previewOutput.Text =
+                        $"Current version : {baseVersion}\r\n" +
+                        $"Target version  : {targetVersion}\r\n\r\n" +
+                        "No update is required.";
+
+                    return;
+                }
+
+                // ------------------------------------------------------------
+                // STEP 4 - Collect selected components
+                // ------------------------------------------------------------
+
+                _previewLabel.Text =
+                    "Preparing MinimalLayout preview...";
+
+                await Task.Yield();
+
+                // ------------------------------------------------------------
+                // STEP 5 - Open a normal, visible Command Prompt window
+                // ------------------------------------------------------------
+
+                _previewLabel.Text =
+                    $"Opening Command Prompt: {baseVersion} → {targetVersion}";
+
+                string[] selectedComponents =
+                    GetSelectedComponentIds();
+
+                string downloadUrl;
+
+                string exeCommand =
+                    _layoutAnalyzer.BuildPreviewCommandLine(
+                        layoutFolder,
+                        edition.ProductId,
+                        baseVersion,
+                        targetVersion,
+                        GetSelectedLanguage(),
+                        selectedComponents,
+                        _recommendedCheck.Checked,
+                        _optionalCheck.Checked,
+                        out string error,
+                        out downloadUrl);
+
+                if (exeCommand == null)
+                {
+                    _previewLabel.Text =
+                        "Preview unavailable: Minimal Layout Tool is not installed.";
+
+                    var result = MessageBox.Show(
+                        this,
+                        error +
+                        "\r\n\r\nWould you like to download the Minimal Layout Tool now?",
+                        "Minimal Layout Tool",
+                        MessageBoxButtons.YesNo,
+                        MessageBoxIcon.Information);
+
+                    if (result == DialogResult.Yes &&
+                        !string.IsNullOrWhiteSpace(downloadUrl))
+                    {
+                        Process.Start(new ProcessStartInfo
+                        {
+                            FileName = downloadUrl,
+                            UseShellExecute = true
+                        });
+                    }
+
+                    return;
+                }
+
+                _previewOutput.AppendText(
+                    "A Command Prompt window will open to run MinimalLayout.exe.\r\n" +
+                    "Read the summary (packages / download size) there, then close the window " +
+                    "or press a key when it says \"Press any key to continue\".\r\n\r\n" +
+                    "Command:\r\n" + exeCommand + "\r\n");
+
+                string cmdArgs =
+                    "/k title Visual Studio Layout Update Preview " +
+                    "& echo Current version : " + baseVersion +
+                    " & echo Target version  : " + targetVersion +
+                    " & echo. & " +
+                    exeCommand +
+                    " & echo. & echo Preview finished. Exit code: %ERRORLEVEL% & pause";
+
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = "cmd.exe",
+                    Arguments = cmdArgs,
+                    WorkingDirectory = layoutFolder,
+                    UseShellExecute = true,
+                });
+
+                _previewLabel.Text =
+                    "Preview running in Command Prompt window.";
+            }
+            catch (Exception ex)
+            {
+                _previewLabel.Text =
+                    "Preview failed.";
+
+                MessageBox.Show(
+                    this,
+                    "An unexpected error occurred during the update preview.\r\n\r\n" +
+                    ex.Message,
+                    "Layout Preview",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+            }
+            finally
+            {
+                _previewButton.Enabled = true;
+                _previewButton.Text = "Preview Update";
+            }
+        }
+
+        private bool TryReadLayoutVersion(string layoutFolder, out string version)
+        {
+            version = null;
+
+            string channelManifest =
+                Path.Combine(
+                    layoutFolder,
+                    "ChannelManifest.json");
+
+            if (!File.Exists(channelManifest))
+                return false;
+
+            try
+            {
+                string json =
+                    File.ReadAllText(channelManifest);
+
+                var match =
+                    System.Text.RegularExpressions.Regex.Match(
+                        json,
+                        @"""productDisplayVersion""\s*:\s*""([^""]+)""",
+                        System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+                if (!match.Success)
+                    return false;
+
+                version =
+                    match.Groups[1].Value.Trim();
+
+                return !string.IsNullOrWhiteSpace(version);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private async Task<string> GetLatestVersionAsync(VsEdition edition)
+        {
+            if (string.IsNullOrWhiteSpace(
+                edition.ChannelUri))
+            {
+                throw new InvalidOperationException(
+                    "Visual Studio channel URI is not configured.");
+            }
+
+            string json =
+                await _http.GetStringAsync(
+                    edition.ChannelUri);
+
+            var match =
+                System.Text.RegularExpressions.Regex.Match(
+                    json,
+                    @"""productDisplayVersion""\s*:\s*""([^""]+)""",
+                    System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+            if (!match.Success)
+            {
+                throw new InvalidOperationException(
+                    "Could not find productDisplayVersion " +
+                    "in the Visual Studio channel manifest.");
+            }
+
+            return match.Groups[1].Value.Trim();
+        }
+
+        private string[] GetSelectedComponentIds()
+        {
+            bool anyExplicitWorkload =
+                _currentWorkloads.Any(w => w.IsSelfSelected);
+
+            bool anyExplicitComponent =
+                _currentWorkloads
+                    .SelectMany(w => w.Components)
+                    .Any(c => c.IsSelfSelected);
+
+            if (!anyExplicitWorkload && !anyExplicitComponent)
+                return new string[0];
+
+            var ids = new List<string>();
+
+            foreach (var workload in _currentWorkloads)
+            {
+                if (workload.IsSelfSelected &&
+                    !string.IsNullOrWhiteSpace(workload.Id))
+                {
+                    ids.Add(workload.Id);
+                }
+
+                foreach (var component in workload.Components)
+                {
+                    if (component.IsSelfSelected &&
+                        !string.IsNullOrWhiteSpace(component.Id))
+                    {
+                        ids.Add(component.Id);
+                    }
+                }
+            }
+
+            return ids
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+
+        private string GetSelectedLanguage()
+        {
+            return _languageCombo.SelectedItem == null
+                ? "en-US"
+                : _languageCombo.SelectedItem.ToString();
+        }
+
+        // ============================================================
         // CLEANUP TAB
         // ============================================================
 
@@ -881,14 +1316,12 @@ namespace VSOfflineTool
 
         private void PickCleanupFolder()
         {
-            using (var dialog = new FolderBrowserDialog { Description = "Select the offline setup layout folder to clean" })
-            {
-                if (Directory.Exists(SharedFolderPath))
-                    dialog.SelectedPath = SharedFolderPath;
+            using var dialog = new FolderBrowserDialog { Description = "Select the offline setup layout folder to clean" };
+            if (Directory.Exists(SharedFolderPath))
+                dialog.SelectedPath = SharedFolderPath;
 
-                if (dialog.ShowDialog() == DialogResult.OK)
-                    SetSharedFolder(dialog.SelectedPath, reloadCleanup: true, save: true);
-            }
+            if (dialog.ShowDialog() == DialogResult.OK)
+                SetSharedFolder(dialog.SelectedPath, reloadCleanup: true, save: true);
         }
 
         private void RefreshCleanupListIfPossible()

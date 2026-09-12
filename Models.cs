@@ -19,6 +19,9 @@ namespace VSOfflineTool
     internal class VsEdition
     {
         public string Name { get; set; }
+        public string ProductId { get; set; }
+
+        public string ChannelUri { get; set; }
         public string SetupUri { get; set; }
         public string WorkloadMarkdownUri { get; set; }
 
@@ -79,21 +82,13 @@ namespace VSOfflineTool
                 if (ParentWorkload == null)
                     return false;
 
-                switch (Dependency)
+                return Dependency switch
                 {
-                    case ComponentDependency.Required:
-                        return ParentWorkload.IsSelected;
-
-                    case ComponentDependency.Recommended:
-                        return ParentWorkload.IsSelected && ComponentSettings.IsRecommended;
-
-                    case ComponentDependency.Optional:
-                        return ParentWorkload.IsSelected && ComponentSettings.IsOptional;
-
-                    case ComponentDependency.Independent:
-                    default:
-                        return false;
-                }
+                    ComponentDependency.Required => ParentWorkload.IsSelected,
+                    ComponentDependency.Recommended => ParentWorkload.IsSelected && ComponentSettings.IsRecommended,
+                    ComponentDependency.Optional => ParentWorkload.IsSelected && ComponentSettings.IsOptional,
+                    _ => false,
+                };
             }
         }
 

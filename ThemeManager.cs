@@ -84,19 +84,17 @@ namespace VSOfflineTool
         {
             try
             {
-                using (var key = Registry.CurrentUser.OpenSubKey(
-                    @"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"))
+                using var key = Registry.CurrentUser.OpenSubKey(
+                    @"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
+                if (key != null)
                 {
-                    if (key != null)
-                    {
-                        object value = key.GetValue("AppsUseLightTheme");
+                    object value = key.GetValue("AppsUseLightTheme");
 
-                        if (value is int intValue)
-                            return intValue == 0;
+                    if (value is int intValue)
+                        return intValue == 0;
 
-                        if (value is long longValue)
-                            return longValue == 0;
-                    }
+                    if (value is long longValue)
+                        return longValue == 0;
                 }
             }
             catch
@@ -442,61 +440,62 @@ namespace VSOfflineTool
             object sender,
             DrawItemEventArgs e)
         {
-            var comboBox = sender as ComboBox;
-
-            if (comboBox == null)
-                return;
-
-            bool dark = comboBox.Tag is bool b && b;
-
-            if (e.Index < 0)
-                return;
-
-            bool selected =
-                (e.State & DrawItemState.Selected) ==
-                DrawItemState.Selected;
-
-            Color backColor;
-            Color foreColor;
-
-            if (dark)
+            using (var comboBox = sender as ComboBox)
             {
-                backColor = selected
-                    ? DarkSelected
-                    : DarkControl;
+                if (comboBox == null)
+                    return;
 
-                foreColor = DarkFore;
+                bool dark = comboBox.Tag is bool b && b;
+
+                if (e.Index < 0)
+                    return;
+
+                bool selected =
+                    (e.State & DrawItemState.Selected) ==
+                    DrawItemState.Selected;
+
+                Color backColor;
+                Color foreColor;
+
+                if (dark)
+                {
+                    backColor = selected
+                        ? DarkSelected
+                        : DarkControl;
+
+                    foreColor = DarkFore;
+                }
+                else
+                {
+                    backColor = selected
+                        ? SystemColors.Highlight
+                        : LightBackAlt;
+
+                    foreColor = selected
+                        ? SystemColors.HighlightText
+                        : LightFore;
+                }
+
+                using (var brush = new SolidBrush(backColor))
+                {
+                    e.Graphics.FillRectangle(
+                        brush,
+                        e.Bounds);
+                }
+
+                string text = comboBox.GetItemText(
+                    comboBox.Items[e.Index]);
+
+                TextRenderer.DrawText(
+                    e.Graphics,
+                    text,
+                    comboBox.Font,
+                    e.Bounds,
+                    foreColor,
+                    TextFormatFlags.Left |
+                    TextFormatFlags.VerticalCenter |
+                    TextFormatFlags.EndEllipsis);
             }
-            else
-            {
-                backColor = selected
-                    ? SystemColors.Highlight
-                    : LightBackAlt;
-
-                foreColor = selected
-                    ? SystemColors.HighlightText
-                    : LightFore;
-            }
-
-            using (var brush = new SolidBrush(backColor))
-            {
-                e.Graphics.FillRectangle(
-                    brush,
-                    e.Bounds);
-            }
-
-            string text = comboBox.GetItemText(
-                comboBox.Items[e.Index]);
-
-            TextRenderer.DrawText(
-                e.Graphics,
-                text,
-                comboBox.Font,
-                e.Bounds,
-                foreColor,
-                TextFormatFlags.Left |
-                TextFormatFlags.VerticalCenter |
-                TextFormatFlags.EndEllipsis);
 
             e.DrawFocusRectangle();
         }
