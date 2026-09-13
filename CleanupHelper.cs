@@ -129,6 +129,68 @@ namespace VSOfflineTool
             return Version.TryParse(text, out version);
         }
 
+        public static VsModule FindNewVersionFolder(string layoutRoot, VsModule oldModule)
+        {
+            if (string.IsNullOrWhiteSpace(layoutRoot) ||
+                oldModule == null ||
+                string.IsNullOrWhiteSpace(oldModule.Name))
+            {
+                return null;
+            }
+
+            var root = new DirectoryInfo(layoutRoot);
+
+            if (!root.Exists)
+                return null;
+
+            var candidates = new List<VsModule>();
+
+            foreach (var directory in root.GetDirectories())
+            {
+                if (directory.Name.Equals(
+                    "Archive",
+                    StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var parsed = ParseModuleDirectory(directory);
+
+                if (parsed == null)
+                    continue;
+
+                if (!parsed.Name.Equals(
+                    oldModule.Name,
+                    StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (!TryParseVersion(parsed.Version, out _))
+                    continue;
+
+                candidates.Add(parsed);
+            }
+
+            if (candidates.Count == 0)
+                return null;
+
+            return candidates
+                .Select(m =>
+                {
+                    TryParseVersion(m.Version, out var version);
+
+                    return new
+                    {
+                        Module = m,
+                        Version = version
+                    };
+                })
+                .OrderByDescending(x => x.Version)
+                .Select(x => x.Module)
+                .FirstOrDefault();
+        }
+
         public static void DeleteFolders(IEnumerable<VsModule> folders)
         {
             foreach (var folder in folders ?? Enumerable.Empty<VsModule>())

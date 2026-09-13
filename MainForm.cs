@@ -1680,17 +1680,12 @@ namespace VSOfflineTool
                 HideSelection = false
             };
 
-            _oldModulesList.Columns.Add(
-                "Module",
-                500);
-
-            _oldModulesList.Columns.Add(
-                "Version",
-                180);
-
-            _oldModulesList.Columns.Add(
-                "Size",
-                120);
+            _oldModulesList.Columns.Add("Module", 360);
+            _oldModulesList.Columns.Add("New Version", 120);
+            _oldModulesList.Columns.Add("Old Version", 120);
+            _oldModulesList.Columns.Add("New Date Modified", 150);
+            _oldModulesList.Columns.Add("Old Date Modified", 150);
+            _oldModulesList.Columns.Add("Size", 110);
 
             modulesGroup.Controls.Add(
                 _oldModulesList);
@@ -1976,14 +1971,47 @@ namespace VSOfflineTool
                     var module = entry.Module;
                     var size = entry.Size;
 
+                    // Find the actual newest folder of the same module.
+                    VsModule newModule =
+                        CleanupHelper.FindNewVersionFolder(
+                            folder,
+                            module);
+
                     var item = new ListViewItem(module.Name)
                     {
                         Checked = true,
                         Tag = module
                     };
 
-                    item.SubItems.Add(module.Version);
-                    item.SubItems.Add(FormatBytes(size));
+                    // New Version
+                    item.SubItems.Add(
+                        newModule == null ||
+                        string.IsNullOrWhiteSpace(newModule.Version)
+                            ? "-"
+                            : newModule.Version);
+
+                    // Old Version
+                    item.SubItems.Add(
+                        string.IsNullOrWhiteSpace(module.Version)
+                            ? "-"
+                            : module.Version);
+
+                    // New Date Modified
+                    item.SubItems.Add(
+                        newModule == null ||
+                        string.IsNullOrWhiteSpace(newModule.FullPath)
+                            ? "-"
+                            : GetDirectoryModifiedDate(
+                                newModule.FullPath));
+
+                    // Old Date Modified
+                    item.SubItems.Add(
+                        GetDirectoryModifiedDate(
+                            module.FullPath));
+
+                    // Size
+                    item.SubItems.Add(
+                        FormatBytes(size));
 
                     _oldModulesList.Items.Add(item);
                 }
@@ -2317,6 +2345,23 @@ namespace VSOfflineTool
 
                 AppendCleanupLog(
                     $"Details: {ex.Message}");
+            }
+        }
+
+        private static string GetDirectoryModifiedDate(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path) || !Directory.Exists(path))
+                return "-";
+
+            try
+            {
+                return Directory
+                    .GetLastWriteTime(path)
+                    .ToString("yyyy-MM-dd HH:mm:ss");
+            }
+            catch
+            {
+                return "-";
             }
         }
 
