@@ -46,6 +46,7 @@ namespace VSOfflineTool
         private TextBox _cliPreview;
 
         private Button _downloadButton;
+        private TextBox _downloadOutput;
 
         private List<Workload> _currentWorkloads = new List<Workload>();
 
@@ -53,6 +54,7 @@ namespace VSOfflineTool
 
         private TextBox _cleanupFolderBox;
         private ListView _oldModulesList;
+        private Button _refreshCleanupButton;
         private Button _deleteOldButton;
         private Button _officialCleanButton;
         private TextBox _cleanupOutput;
@@ -72,8 +74,8 @@ namespace VSOfflineTool
             Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
 
             Width = 1000;
-            Height = 760;
-            MinimumSize = new Size(850, 620);
+            Height = 950;
+            MinimumSize = new Size(980, 820);
             StartPosition = FormStartPosition.CenterScreen;
 
             BuildTreeStateImages();
@@ -89,12 +91,12 @@ namespace VSOfflineTool
             tabs.TabPages.Add(downloadTab);
             tabs.TabPages.Add(cleanupTab);
 
-            tabs.SelectedIndexChanged += (s, e) =>
+            tabs.SelectedIndexChanged += async (s, e) =>
             {
                 if (tabs.SelectedTab == cleanupTab)
                 {
                     _cleanupTabActivated = true;
-                    RefreshCleanupListIfPossible();
+                    await RefreshCleanupListIfPossibleAsync();
                 }
             };
 
@@ -266,7 +268,7 @@ namespace VSOfflineTool
                 RegenerateCli();
 
                 if (reloadCleanup)
-                    RefreshCleanupListIfPossible();
+                    _ = RefreshCleanupListIfPossibleAsync();
             }
             finally
             {
@@ -312,9 +314,10 @@ namespace VSOfflineTool
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));    // options
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));    // folder
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));    // note
-            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 38)); // workloads
-            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 18)); // installer command
-            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 24)); // update preview
+            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 40)); // workloads
+            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 15));    // installer command (label + button + one-line preview)
+            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 30)); // download output
+            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 30)); // update preview
 
             // =========================
             // INSTALLATION OPTIONS
@@ -325,7 +328,7 @@ namespace VSOfflineTool
                 Text = "Installation options",
                 Dock = DockStyle.Top,
                 AutoSize = true,
-                Padding = new Padding(10, 6, 10, 10),
+                Padding = new Padding(8, 12, 8, 8),
                 Margin = new Padding(0, 0, 0, 6)
             };
 
@@ -446,7 +449,7 @@ namespace VSOfflineTool
                 Text = "Destination folder",
                 Dock = DockStyle.Top,
                 AutoSize = true,
-                Padding = new Padding(10, 6, 10, 10),
+                Padding = new Padding(8, 12, 8, 8),
                 Margin = new Padding(0, 0, 0, 6)
             };
 
@@ -523,7 +526,7 @@ namespace VSOfflineTool
             {
                 Text = "Workloads",
                 Dock = DockStyle.Fill,
-                Padding = new Padding(6, 10, 6, 6),
+                Padding = new Padding(8, 12, 8, 8),
                 Margin = new Padding(0, 0, 0, 6)
             };
 
@@ -558,15 +561,15 @@ namespace VSOfflineTool
             var cliLayout = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
-                ColumnCount = 1,
-                RowCount = 2
+                ColumnCount = 2,
+                RowCount = 1
             };
 
-            cliLayout.RowStyles.Add(
-                new RowStyle(SizeType.AutoSize));
+            cliLayout.ColumnStyles.Add(
+                new ColumnStyle(SizeType.AutoSize));
 
-            cliLayout.RowStyles.Add(
-                new RowStyle(SizeType.Percent, 100));
+            cliLayout.ColumnStyles.Add(
+                new ColumnStyle(SizeType.Percent, 100));
 
 
             // =========================
@@ -578,13 +581,13 @@ namespace VSOfflineTool
                 Text = "Download setup && run",
                 AutoSize = true,
                 Anchor = AnchorStyles.Left,
-                Margin = new Padding(3, 0, 3, 6)
+                Margin = new Padding(0, 0, 6, 0)
             };
 
             _downloadButton.Click += async (s, e) =>
                 await DownloadAndRunAsync();
 
-            cliLayout.Controls.Add(_downloadButton,0,0);
+            cliLayout.Controls.Add(_downloadButton, 0, 0);
 
 
             // =========================
@@ -597,15 +600,41 @@ namespace VSOfflineTool
                 Multiline = true,
                 ReadOnly = true,
                 ScrollBars = ScrollBars.Vertical,
-                Font = new Font("Consolas", 9),
-                Margin = new Padding(3)
+                Font = new Font("Consolas", 9)
             };
 
-            cliLayout.Controls.Add(_cliPreview,0,1);
+            cliLayout.Controls.Add(_cliPreview, 1, 0);
 
             cliGroup.Controls.Add(cliLayout);
 
-            layout.Controls.Add(cliGroup,0,4);
+            layout.Controls.Add(cliGroup, 0, 4);
+
+            // =========================
+            // DOWNLOAD OUTPUT
+            // =========================
+
+            var downloadOutputGroup = new GroupBox
+            {
+                Text = "Download output",
+                Dock = DockStyle.Fill,
+                Padding = new Padding(8, 12, 8, 8),
+                Margin = new Padding(0, 0, 0, 6)
+            };
+
+            _downloadOutput = new TextBox
+            {
+                Dock = DockStyle.Fill,
+                Multiline = true,
+                ReadOnly = true,
+                ScrollBars = ScrollBars.Vertical,
+                Font = new Font("Consolas", 9),
+                Margin = new Padding(3),
+                MinimumSize = new Size(0, 60)
+            };
+
+            downloadOutputGroup.Controls.Add(_downloadOutput);
+
+            layout.Controls.Add(downloadOutputGroup, 0, 5);
 
             // =========================
             // UPDATE PREVIEW
@@ -622,12 +651,15 @@ namespace VSOfflineTool
             var previewLayout = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
-                ColumnCount = 1,
-                RowCount = 3
+                ColumnCount = 2,
+                RowCount = 2
             };
 
-            previewLayout.RowStyles.Add(
-                new RowStyle(SizeType.AutoSize));
+            previewLayout.ColumnStyles.Add(
+                new ColumnStyle(SizeType.AutoSize));
+
+            previewLayout.ColumnStyles.Add(
+                new ColumnStyle(SizeType.Percent, 100));
 
             previewLayout.RowStyles.Add(
                 new RowStyle(SizeType.AutoSize));
@@ -641,7 +673,7 @@ namespace VSOfflineTool
                 Text = "Preview Update",
                 AutoSize = true,
                 Anchor = AnchorStyles.Left,
-                Margin = new Padding(3)
+                Margin = new Padding(0, 0, 6, 0)
             };
 
             _previewButton.Click += async (s, e) =>
@@ -653,14 +685,12 @@ namespace VSOfflineTool
             _previewLabel = new Label
             {
                 AutoSize = true,
+                Dock = DockStyle.Fill,
                 Text = "Update preview: not calculated",
                 Margin = new Padding(3, 6, 3, 3)
             };
 
-            previewLayout.Controls.Add(
-                _previewLabel,
-                0,
-                1);
+            previewLayout.Controls.Add(_previewLabel, 1, 0);
 
             _previewOutput = new TextBox
             {
@@ -669,14 +699,16 @@ namespace VSOfflineTool
                 ReadOnly = true,
                 ScrollBars = ScrollBars.Vertical,
                 Font = new Font("Consolas", 8.5f),
-                Margin = new Padding(3)
+                Margin = new Padding(3),
+                MinimumSize = new Size(0, 60)
             };
 
-            previewLayout.Controls.Add(_previewOutput,0,2);
+            previewLayout.Controls.Add(_previewOutput, 0, 1);
+            previewLayout.SetColumnSpan(_previewOutput, 2);
 
             previewGroup.Controls.Add(previewLayout);
 
-            layout.Controls.Add(previewGroup,0,5);
+            layout.Controls.Add(previewGroup,0,6);
 
             page.Controls.Add(layout);
 
@@ -1022,10 +1054,18 @@ namespace VSOfflineTool
             Cursor = Cursors.WaitCursor;
             _downloadButton.Enabled = false;
 
+            ClearDownloadLog();
+            AppendDownloadLog("Starting setup download...");
+            AppendDownloadLog($"Edition: {edition.Name}");
+            AppendDownloadLog($"Source URL: {edition.SetupUri}");
+            AppendDownloadLog($"Destination: {exePath}");
+
             try
             {
-                var bytes = await _http.GetByteArrayAsync(edition.SetupUri);
-                File.WriteAllBytes(exePath, bytes);
+                await DownloadFileWithProgressAsync(edition.SetupUri, exePath);
+
+                AppendDownloadLog("Download completed successfully.");
+                AppendDownloadLog("Launching installer...");
 
                 Process.Start(new ProcessStartInfo
                 {
@@ -1035,9 +1075,14 @@ namespace VSOfflineTool
                     WorkingDirectory = setupDir.FullName,
                     UseShellExecute = true,
                 });
+
+                AppendDownloadLog("Installer launched.");
             }
             catch (Exception ex)
             {
+                AppendDownloadLog($"Download failed: {ex.GetType().Name}");
+                AppendDownloadLog($"Details: {ex.Message}");
+
                 MessageBox.Show(
                     "Error occured: " + ex.GetType(),
                     "Error",
@@ -1049,6 +1094,70 @@ namespace VSOfflineTool
                 Cursor = Cursors.Default;
                 _downloadButton.Enabled = true;
             }
+        }
+
+        private async Task DownloadFileWithProgressAsync(string url, string destinationPath)
+        {
+            using var response = await _http.GetAsync(
+                url,
+                HttpCompletionOption.ResponseHeadersRead);
+
+            response.EnsureSuccessStatusCode();
+
+            long? totalBytes = response.Content.Headers.ContentLength;
+
+            AppendDownloadLog(
+                totalBytes.HasValue
+                    ? $"Total size: {FormatBytes(totalBytes.Value)}"
+                    : "Total size: unknown (server did not report content length).");
+
+            using var contentStream = await response.Content.ReadAsStreamAsync();
+            using var fileStream = new FileStream(
+                destinationPath,
+                FileMode.Create,
+                FileAccess.Write,
+                FileShare.None,
+                81920,
+                useAsync: true);
+
+            var buffer = new byte[81920];
+            long totalRead = 0;
+            int lastReportedPercent = -1;
+            long lastReportedBucket = -1;
+
+            int read;
+            while ((read = await contentStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+            {
+                await fileStream.WriteAsync(buffer, 0, read);
+                totalRead += read;
+
+                if (totalBytes.HasValue && totalBytes.Value > 0)
+                {
+                    int percent = (int)(totalRead * 100 / totalBytes.Value);
+
+                    // Log every 5% so it doesn't flood the box.
+                    if (percent / 5 != lastReportedPercent / 5 || percent == 100)
+                    {
+                        lastReportedPercent = percent;
+
+                        AppendDownloadLog(
+                            $"Downloading... {percent}%  " +
+                            $"({FormatBytes(totalRead)} / {FormatBytes(totalBytes.Value)})");
+                    }
+                }
+                else
+                {
+                    // Unknown total size: log every ~5 MB.
+                    long bucket = totalRead / (5 * 1024 * 1024);
+                    if (bucket != lastReportedBucket)
+                    {
+                        lastReportedBucket = bucket;
+                        AppendDownloadLog($"Downloaded {FormatBytes(totalRead)} so far...");
+                    }
+                }
+            }
+
+            AppendDownloadLog($"Downloaded {FormatBytes(totalRead)} in total.");
         }
 
         // ============================================================
@@ -1460,7 +1569,7 @@ namespace VSOfflineTool
                 Text = "Offline layout folder",
                 Dock = DockStyle.Top,
                 AutoSize = true,
-                Padding = new Padding(10, 6, 10, 10),
+                Padding = new Padding(8, 12, 8, 8),
                 Margin = new Padding(0, 0, 0, 6)
             };
 
@@ -1468,14 +1577,12 @@ namespace VSOfflineTool
             {
                 Dock = DockStyle.Top,
                 AutoSize = true,
-                ColumnCount = 2
+                ColumnCount = 3
             };
 
-            topRow.ColumnStyles.Add(
-                new ColumnStyle(SizeType.AutoSize));
-
-            topRow.ColumnStyles.Add(
-                new ColumnStyle(SizeType.Percent, 100));
+            topRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            topRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            topRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
 
 
             var folderButton = new Button
@@ -1499,10 +1606,30 @@ namespace VSOfflineTool
 
             _cleanupFolderBox.TextChanged += FolderBox_TextChanged;
 
-            topRow.Controls.Add(
-                _cleanupFolderBox,
-                1,
-                0);
+            topRow.Controls.Add(_cleanupFolderBox, 1, 0);
+
+            _refreshCleanupButton = new Button
+            {
+                Text = "Refresh",
+                AutoSize = true,
+                Margin = new Padding(6, 3, 3, 3)
+            };
+
+            _refreshCleanupButton.Click += async (s, e) =>
+            {
+                _refreshCleanupButton.Enabled = false;
+
+                try
+                {
+                    await RefreshCleanupListIfPossibleAsync();
+                }
+                finally
+                {
+                    _refreshCleanupButton.Enabled = true;
+                }
+            };
+
+            topRow.Controls.Add(_refreshCleanupButton, 2, 0);
 
             folderGroup.Controls.Add(topRow);
 
@@ -1525,8 +1652,8 @@ namespace VSOfflineTool
                 Margin = new Padding(3, 4, 3, 6),
 
                 Text =
-                    "Note: If no checkbox below is selected, all listed old-version folders will be deleted " +
-                    "(same as the original tool, which has no per-item selection at all)."
+                    "Note: All detected old-version folders are selected by default. " +
+                    "Uncheck any folder you want to keep. Only checked folders will be deleted."
             };
 
             layout.Controls.Add(noteLabel,0,1);
@@ -1540,7 +1667,7 @@ namespace VSOfflineTool
             {
                 Text = "Old versions",
                 Dock = DockStyle.Fill,
-                Padding = new Padding(6, 10, 6, 6),
+                Padding = new Padding(8, 12, 8, 8),
                 Margin = new Padding(0, 0, 0, 6)
             };
 
@@ -1561,6 +1688,10 @@ namespace VSOfflineTool
                 "Version",
                 180);
 
+            _oldModulesList.Columns.Add(
+                "Size",
+                120);
+
             modulesGroup.Controls.Add(
                 _oldModulesList);
 
@@ -1576,7 +1707,7 @@ namespace VSOfflineTool
                 Text = "Cleanup actions",
                 Dock = DockStyle.Top,
                 AutoSize = true,
-                Padding = new Padding(8, 6, 8, 8),
+                Padding = new Padding(8, 12, 8, 8),
                 Margin = new Padding(0)
             };
 
@@ -1628,7 +1759,7 @@ namespace VSOfflineTool
             {
                 Text = "Cleanup output",
                 Dock = DockStyle.Fill,
-                Padding = new Padding(8, 10, 8, 8),
+                Padding = new Padding(8, 12, 8, 8),
                 Margin = new Padding(0, 6, 0, 0)
             };
 
@@ -1639,7 +1770,8 @@ namespace VSOfflineTool
                 ReadOnly = true,
                 ScrollBars = ScrollBars.Vertical,
                 Font = new Font("Consolas", 9),
-                Margin = new Padding(3)
+                Margin = new Padding(3),
+                MinimumSize = new Size(0, 130)
             };
 
             outputGroup.Controls.Add(_cleanupOutput);
@@ -1676,6 +1808,93 @@ namespace VSOfflineTool
             _cleanupOutput?.Clear();
         }
 
+        private void AppendDownloadLog(string message)
+        {
+            if (_downloadOutput == null)
+                return;
+
+            if (_downloadOutput.InvokeRequired)
+            {
+                _downloadOutput.BeginInvoke(
+                    new Action(() => AppendDownloadLog(message)));
+                return;
+            }
+
+            _downloadOutput.AppendText(
+                $"[{DateTime.Now:HH:mm:ss}] {message}\r\n");
+
+            _downloadOutput.SelectionStart = _downloadOutput.TextLength;
+            _downloadOutput.ScrollToCaret();
+        }
+
+        private void ClearDownloadLog()
+        {
+            _downloadOutput?.Clear();
+        }
+
+        private static string FormatBytes(long bytes)
+        {
+            string[] units = { "B", "KB", "MB", "GB" };
+            double size = bytes;
+            int unitIndex = 0;
+
+            while (size >= 1024 && unitIndex < units.Length - 1)
+            {
+                size /= 1024;
+                unitIndex++;
+            }
+
+            return $"{size:0.##} {units[unitIndex]}";
+        }
+
+        private static long GetDirectorySize(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path) || !Directory.Exists(path))
+                return 0;
+
+            long size = 0;
+
+            try
+            {
+                var files = Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories);
+
+                foreach (var file in files)
+                {
+                    try
+                    {
+                        size += new FileInfo(file).Length;
+                    }
+                    catch
+                    {
+                        // Skip files that can't be accessed (locked, permissions, etc.)
+                    }
+                }
+            }
+            catch
+            {
+                // Skip directories that can't be enumerated
+            }
+
+            return size;
+        }
+
+        private static long GetFreeDiskSpace(string anyPathOnDrive)
+        {
+            try
+            {
+                var root = Path.GetPathRoot(anyPathOnDrive);
+                if (string.IsNullOrWhiteSpace(root))
+                    return -1;
+
+                var drive = new DriveInfo(root);
+                return drive.AvailableFreeSpace;
+            }
+            catch
+            {
+                return -1;
+            }
+        }
+
         private void PickCleanupFolder()
         {
             using var dialog = new FolderBrowserDialog { Description = "Select the offline setup layout folder to clean" };
@@ -1686,7 +1905,7 @@ namespace VSOfflineTool
                 SetSharedFolder(dialog.SelectedPath, reloadCleanup: true, save: true);
         }
 
-        private void RefreshCleanupListIfPossible()
+        private async Task RefreshCleanupListIfPossibleAsync()
         {
             if (!_cleanupTabActivated)
                 return;
@@ -1716,19 +1935,47 @@ namespace VSOfflineTool
                 return;
             }
 
-            LoadCleanupList(SharedFolderPath);
+            await LoadCleanupListAsync(SharedFolderPath);
         }
 
-        private void LoadCleanupList(string folder)
+        private async Task LoadCleanupListAsync(string folder)
         {
+            if (_oldModulesList == null)
+                return;
+
             _oldModulesList.Items.Clear();
+            _oldModules.Clear();
 
             try
             {
-                _oldModules = CleanupHelper.FindOldVersionFolders(folder);
+                AppendCleanupLog("Scanning offline layout for old versions...");
 
-                foreach (var module in _oldModules)
+                // File-system scanning runs on a background thread.
+                var moduleSizes = await Task.Run(() =>
                 {
+                    var modules = CleanupHelper.FindOldVersionFolders(folder);
+
+                    var result = new List<(VsModule Module, long Size)>();
+
+                    foreach (var module in modules)
+                    {
+                        long size = GetDirectorySize(module.FullPath);
+                        result.Add((module, size));
+                    }
+
+                    return result;
+                });
+
+                // We are back on the WinForms UI thread here.
+                _oldModules = moduleSizes
+                    .Select(x => x.Module)
+                    .ToList();
+
+                foreach (var entry in moduleSizes)
+                {
+                    var module = entry.Module;
+                    var size = entry.Size;
+
                     var item = new ListViewItem(module.Name)
                     {
                         Checked = true,
@@ -1736,6 +1983,8 @@ namespace VSOfflineTool
                     };
 
                     item.SubItems.Add(module.Version);
+                    item.SubItems.Add(FormatBytes(size));
+
                     _oldModulesList.Items.Add(item);
                 }
 
@@ -1744,16 +1993,38 @@ namespace VSOfflineTool
                     AppendCleanupLog(
                         "No old-version folders were found in the selected offline layout.");
 
+                    long freeSpace = GetFreeDiskSpace(folder);
+
+                    if (freeSpace >= 0)
+                    {
+                        AppendCleanupLog(
+                            $"Free disk space: {FormatBytes(freeSpace)}");
+                    }
+
                     return;
                 }
+
+                long totalOldVersionSize =
+                    moduleSizes.Sum(x => x.Size);
 
                 AppendCleanupLog(
                     $"Found {_oldModules.Count} old-version folder(s).");
 
+                AppendCleanupLog(
+                    $"Total old-version size: {FormatBytes(totalOldVersionSize)}");
+
+                long currentFreeSpace = GetFreeDiskSpace(folder);
+
+                if (currentFreeSpace >= 0)
+                {
+                    AppendCleanupLog(
+                        $"Free disk space: {FormatBytes(currentFreeSpace)}");
+                }
+
                 foreach (var module in _oldModules)
                 {
                     AppendCleanupLog(
-                        $"  {module.Name}  |  Version: {module.Version}");
+                        $"  {module.Name} | Version: {module.Version}");
                 }
             }
             catch (Exception ex)
@@ -1768,7 +2039,7 @@ namespace VSOfflineTool
             }
         }
 
-        private void DeleteOldVersions()
+        private async void DeleteOldVersions()
         {
             ClearCleanupLog();
 
@@ -1781,11 +2052,7 @@ namespace VSOfflineTool
                     .Where(i => i.Checked)
                     .ToList();
 
-            // If nothing is checked, delete all discovered modules.
-            var toDelete =
-                (checkedItems.Count > 0
-                    ? checkedItems
-                    : _oldModulesList.Items.Cast<ListViewItem>())
+            var toDelete = checkedItems
                 .Select(i => i.Tag as VsModule)
                 .Where(m => m != null)
                 .ToList();
@@ -1793,7 +2060,7 @@ namespace VSOfflineTool
             if (toDelete.Count == 0)
             {
                 AppendCleanupLog(
-                    "Nothing to delete. No old-version folders were found.");
+                    "Nothing to delete. No old-version folders are selected.");
 
                 return;
             }
@@ -1801,15 +2068,53 @@ namespace VSOfflineTool
             AppendCleanupLog(
                 $"Selected {toDelete.Count} folder(s) for deletion.");
 
-            foreach (var module in toDelete)
+            // ------------------------------------------------------------
+            // Calculate total size of the folders to be deleted (off UI thread)
+            // ------------------------------------------------------------
+
+            AppendCleanupLog("Calculating folder sizes...");
+
+            Cursor = Cursors.WaitCursor;
+            _deleteOldButton.Enabled = false;
+
+            long totalSizeToDelete = 0;
+
+            try
             {
-                AppendCleanupLog(
-                    $"  Delete: {module.Name} | Version: {module.Version}");
+                var sizes = await Task.Run(() =>
+                {
+                    var result = new List<(VsModule Module, long Size)>();
+
+                    foreach (var module in toDelete)
+                        result.Add((module, GetDirectorySize(module.FullPath)));
+
+                    return result;
+                });
+
+                foreach (var (module, size) in sizes)
+                {
+                    totalSizeToDelete += size;
+
+                    AppendCleanupLog(
+                        $"  Delete: {module.Name} | Version: {module.Version} | Size: {FormatBytes(size)}");
+                }
             }
+            finally
+            {
+                Cursor = Cursors.Default;
+                _deleteOldButton.Enabled = true;
+            }
+
+            AppendCleanupLog(
+                $"Total size to be freed: {FormatBytes(totalSizeToDelete)}");
+
+            long freeSpaceBefore = GetFreeDiskSpace(SharedFolderPath);
 
             // This is intentionally the only confirmation dialog.
             var confirm = MessageBox.Show(
-                $"Delete {toDelete.Count} folder(s)? This cannot be undone.",
+                $"Delete {toDelete.Count} folder(s)?\n\n" +
+                $"Total size to be freed: {FormatBytes(totalSizeToDelete)}\n\n" +
+                "This cannot be undone.",
                 "Confirm",
                 MessageBoxButtons.YesNo,
                 MessageBoxIcon.Warning);
@@ -1829,14 +2134,25 @@ namespace VSOfflineTool
 
                 AppendCleanupLog("Deleting old-version folders...");
 
-                CleanupHelper.DeleteFolders(toDelete);
+                await Task.Run(() => CleanupHelper.DeleteFolders(toDelete));
 
                 AppendCleanupLog(
                     $"Successfully deleted {toDelete.Count} folder(s).");
 
+                AppendCleanupLog(
+                    $"Freed approximately {FormatBytes(totalSizeToDelete)} of disk space.");
+
+                long freeSpaceAfter = GetFreeDiskSpace(SharedFolderPath);
+
+                if (freeSpaceBefore >= 0 && freeSpaceAfter >= 0)
+                {
+                    AppendCleanupLog(
+                        $"Free disk space: {FormatBytes(freeSpaceBefore)} -> {FormatBytes(freeSpaceAfter)}");
+                }
+
                 AppendCleanupLog("Refreshing old-version list...");
 
-                LoadCleanupList(SharedFolderPath);
+                await LoadCleanupListAsync(SharedFolderPath);
 
                 AppendCleanupLog("Cleanup operation completed successfully.");
             }
